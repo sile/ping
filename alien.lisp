@@ -38,6 +38,7 @@
                   (__unused __be16)
                   (mtu      __be16)))))))
 
+;; TODO: typeによって表示する内容を分ける
 (defun icmphr-to-list (obj)
   `(:struct :icmphdr
             :type ,(slot obj 'type)
@@ -170,20 +171,22 @@
           sum (+ (ldb (byte 16 0) sum) (ash sum -16)))
     (logxor #xFFFF (ldb (byte 16 0) sum))))
 
-(defun make-icmp-header (&key type)
+(defun make-icmp-header (&key type sequence)
   (declare #.*muffle-compiler-note*)
   (let* ((*h (make-alien (struct icmphdr)))
          (h  (deref *h)))
     (memset *h 0 (alien-size (struct icmphdr) :bytes))
     
     (setf (slot h 'type) type
+          (slots h 'un 'echo 'sequence) (inet-int sequence 2)
           (slot h 'checksum) (inet-int (checksum *h (alien-size (struct icmphdr) :bytes)) 2))
     *h))
 
-(defun ping (ip)
-  (declare #.*muffle-compiler-note*)
+(defun ping (ip &key (sequence 0))
+  (declare #.*muffle-compiler-note*
+           ((unsigned-byte 16) sequence))
   (let ((*addr (make-sockaddr-in +AF_INET+ ip))
-        (*hdr (make-icmp-header :type +ICMP_ECHO+))
+        (*hdr (make-icmp-header :type +ICMP_ECHO+ :sequence sequence))
         (socket (make-socket-fd +AF_INET+ +SOCK_RAW+ +IPPROTO_ICMP+)))
     (unless socket
       (return-from ping (sb-int:strerror (get-errno))))
@@ -196,42 +199,20 @@
       (when (= ret -1)
         (return-from ping (sb-int:strerror (get-errno))))
       
+      
       (let* ((buf (make-alien (array (unsigned 8) 2000)))
              (ret (recv socket buf 2000 0)))
         (when (= ret -1)
           (return-from ping (sb-int:strerror (get-errno))))
         
         (let* ((*iphdr (cast buf (* (struct iphdr))))
-               (*icmphdr (cast (deref buf (* (iphdr.ihl (deref *iphdr)) 4))
+               (*icmphdr (cast (addr (deref (deref buf) (* (iphdr.ihl (deref *iphdr)) 4)))
                                (* (struct icmphdr)))))
+          (print (alien-sap *iphdr))
+          (print (alien-sap *icmphdr))
           (print (iphdr-to-list (deref *iphdr)))
           (print (icmphr-to-list (deref *icmphdr)))
           (if (= (slot (deref *icmphdr) 'type) +ICMP_ECHOREPLY+)
               :reply
             (slot (deref *icmphdr) 'type)))
         ))))
-
-            
-#|
-struct iphdr {
-#if defined(__LITTLE_ENDIAN_BITFIELD)
-        __u8    ihl:4,
-                version:4;
-#elif defined (__BIG_ENDIAN_BITFIELD)
-        __u8    version:4,
-                ihl:4;
-#else
-#error  "Please fix <asm/byteorder.h>"
-#endif
-        __u8    tos;
-        __be16  tot_len;
-        __be16  id;
-        __be16  frag_off;
-        __u8    ttl;
-        __u8    protocol;
-        __sum16 check;
-        __be32  saddr;
-        __be32  daddr;
-        /*The options start here. */
-};
-|#

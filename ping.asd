@@ -7,5 +7,7 @@
   :description "icmp ping"
   :serial t
   :components ((:file "package")
+               (:file "util")
+               (:file "type")
                (:file "alien")
                (:file "ping")))
