@@ -81,7 +81,4 @@
     (n.if (ip (resolve-address target))
         (ping-impl (init-sockaddr-in sa ip) 0 loop-count)
       (values nil `(:unknown-host ,target)))))
-    
-
-
 

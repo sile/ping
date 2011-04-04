@@ -1,1 +1,10 @@
-- ping
+### 概要
+・SBCLによるicmpのpingの実装
+
+### バージョン
+・0.0.1
+
+### API
+・(ping:ping target &key (loop-count 10))
+　- target: ping先のIPアドレスかホスト名。文字列 or #(x x x x)形式
+　- loop-count: pingメッセージを送信する回数
