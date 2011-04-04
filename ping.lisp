@@ -25,11 +25,10 @@
   sa)
 
 (defun init-icmp-echo-header (icmp &key type sequence)
-  (memset icmp 0 (alien-size (struct icmp-echo-header) :bytes))
+  (memset icmp 0 icmp-echo-header.size)
   (setf (icmp-echo-header.type icmp) type
         (icmp-echo-header.seq-num icmp) sequence
-        (icmp-echo-header.checksum icmp) (checksum icmp 
-                                                   (alien-size (struct icmp-echo-header) :bytes)))
+        (icmp-echo-header.checksum icmp) (checksum icmp icmp-echo-header.size))
   icmp)
 
 (defun summarize (results)
@@ -47,6 +46,10 @@
   (/= -1 (sendto socket
                  (cast icmp (* t)) icmp-echo-header.size flags
                  (cast sa (* (struct sockaddr-in))) sockaddr-in.size)))
+
+(defun icmp-recv (socket buf flags)
+  (declare #.*muffle-compiler-note*)
+  (/= -1 (recv socket (cast buf (* t)) ip-echo.size flags)))
 
 (defun ping-impl (sa seq-num loop-count)
   (declare #.*muffle-compiler-note*)

@@ -4,6 +4,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; IP header
+(eval-when (:load-toplevel :compile-toplevel :execute)
 (define-alien-type nil
   (struct ip-header
     (version         (unsigned 04))
@@ -17,7 +18,7 @@
     (protocol        (unsigned 8))
     (checksum        (unsigned 16))
     (src-addr        (unsigned 32))
-    (dst-addr        (unsigned 32))))
+    (dst-addr        (unsigned 32)))))
 
 (defun ip-header.version (h)
   (ldb (byte 4 4) (alien-coerce (slot h 'version) (unsigned 8))))
@@ -124,13 +125,14 @@
 (defconstant +ICMP_ECHO+ 8)
 (defconstant +ICMP_ECHO_REPLY+ 0)
 
+(eval-when (:load-toplevel :compile-toplevel :execute)
 (define-alien-type nil
   (struct icmp-echo-header
     (type     (unsigned 08))
     (code     (unsigned 08))
     (checksum (unsigned 16))
     (id       (unsigned 16))
-    (seq-num  (unsigned 16))))
+    (seq-num  (unsigned 16)))))
 
 (defun icmp-echo-header.type (h)
   (slot h 'type))
@@ -181,12 +183,13 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; sockaddr
+(eval-when (:load-toplevel :compile-toplevel :execute)
 (define-alien-type nil
   (struct sockaddr-in
     (family (unsigned 16))
     (port   (unsigned 16))
     (addr   (unsigned 32))
-    (__pad  (array char 8))))
+    (__pad  (array char 8)))))
 
 (defun sockaddr-in.family (o)
   (slot o 'family) 2)
@@ -232,10 +235,11 @@
 
 ;;;;;;;;;;;
 ;; echo
+(eval-when (:load-toplevel :compile-toplevel :execute)
 (define-alien-type nil
   (struct ip-echo 
     (ip-header (struct ip-header))
-    (icmp-echo (struct icmp-echo-header))))
+    (icmp-echo (struct icmp-echo-header)))))
 
 
 (set-pprint-dispatch '(alien (struct ip-echo))
