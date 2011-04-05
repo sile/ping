@@ -122,9 +122,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; icmp header
+(eval-when (:load-toplevel :compile-toplevel :execute)
 (defconstant +ICMP_ECHO+ 8)
 (defconstant +ICMP_ECHO_REPLY+ 0)
-(defconstant +ICMP_UNREACH+ 3)
+(defconstant +ICMP_UNREACH+ 3))
 
 (defparameter *icmp-unreach-types*
   (list
@@ -251,7 +252,10 @@
 (defconstant +AF_INET+ 2)
 (defconstant +SOCK_RAW+ 3)
 (defconstant +IPPROTO_ICMP+ 1)
-
+(defconstant +SOL_SOCKET+ 1)
+(defconstant +SOL_RAW+ 255)
+(defconstant +SOL_PACKET+ 263)
+(defconstant +SO_BROADCAST+ 6)
 
 ;;;;;;;;;;;
 ;; echo

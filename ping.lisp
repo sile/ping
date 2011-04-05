@@ -5,18 +5,30 @@
 (define-alien-type socklen_t (unsigned 32))
 
 (eval-when (:load-toplevel)
+  (define-alien-routine setsockopt int (sockfd int) (level int) (optname int) 
+                                       (optval (* t)) (optlen socklen_t))
   (define-alien-routine socket int (domain int) (type int) (protocol int))
   (define-alien-routine sendto int (sockfd int) (buf (* t))
                                    (len size_t) (flags int)
                                    (dest_addr (* (struct sockaddr-in))) (addrlen socklen_t))
   (define-alien-routine recv size_t (socketfd int) (buf (* t)) (len size_t) (flags int)))
 
+(defun set-broadcast-option (socket)
+  (declare #.*muffle-compiler-note*)
+  (with-alien ((yes (array int 1)))
+    (setf (deref yes 1) 1)
+    (or (= 0 (setsockopt socket +SOL_SOCKET+ +SO_BROADCAST+
+                        (cast yes (* t)) (alien-size int :bytes)))
+        (progn (sb-unix:unix-close socket) nil))))
 
-(defun make-socket-fd (domain type protocol)
+(defun make-socket-fd (domain type protocol &key broadcast)
   (let ((fd (socket domain type protocol)))
     (if (= fd -1)
         (values nil (get-errno) (sb-int:strerror (get-errno)))
-      (values fd nil nil))))
+      (if (or (not broadcast)
+              (set-broadcast-option fd))
+          (values fd nil nil)
+        (values nil (get-errno) (sb-int:strerror (get-errno)))))))
 
 (defun init-sockaddr-in (sa ip)
   (setf (sockaddr-in.family sa) +AF_INET+
@@ -30,9 +42,6 @@
         (icmp-echo-header.seq-num icmp) sequence
         (icmp-echo-header.checksum icmp) (checksum icmp icmp-echo-header.size))
   icmp)
-
-(defun summarize (results)
-  results)
 
 (defun log-msg (fmt &rest args)
   (format *error-output* "; ~?~%" fmt args))
@@ -63,7 +72,7 @@
     (otherwise
       (list :unknown (icmp-echo-header.type icmp)))))
 
-(defun ping-impl (sa seq-num loop-count flags)
+(defun ping-impl (sa seq-num loop-count flags broadcast sleep)
   (declare #.*muffle-compiler-note*)
   (if (>= seq-num loop-count)
       'done
@@ -71,7 +80,8 @@
                  (echo (struct ip-echo)))
       (init-icmp-echo-header icmp :type +ICMP_ECHO+ :sequence seq-num)
       (multiple-value-bind (sock errcode reason) 
-                           (make-socket-fd +AF_INET+ +SOCK_RAW+ +IPPROTO_ICMP+)
+                           (make-socket-fd +AF_INET+ +SOCK_RAW+ +IPPROTO_ICMP+
+                                           :broadcast broadcast)
         (unless sock
           (return-from ping-impl (values nil `(:make-socket-error ,errcode ,reason))))
         
@@ -89,7 +99,8 @@
           (log-msg "From ~/ping::ip-fmt/: icmp_seq=~d ttl=~d time=~d ms: ~a" 
                    (addr-to-ip (ip-header.src-addr ip)) seq-num (ip-header.ttl ip) (round took)
                    (extract-message icmp))
-          (ping-impl sa (1+ seq-num) loop-count flags))))))
+          (sleep sleep)
+          (ping-impl sa (1+ seq-num) loop-count flags broadcast sleep))))))
 
 (defun make-flags (&key dont-route)
   (let ((flags 0))
@@ -97,12 +108,12 @@
       (setf flags (logior flags +MSG_DONTROUTE+)))
     flags))
  
-(defun ping (target &key (loop-count 10) dont-route)
+(defun ping (target &key (loop-count 10) dont-route broadcast (sleep 0.4))
   (declare #.*muffle-compiler-note*)
   (log-msg "ping to ~a~@[ (~/ping::ip-fmt/)~]" target (resolve-address target))
   (let ((flags (make-flags :dont-route dont-route)))
     (with-alien ((sa (struct sockaddr-in)))
       (n.if (ip (resolve-address target))
-          (ping-impl (init-sockaddr-in sa ip) 0 loop-count flags)
+          (ping-impl (init-sockaddr-in sa ip) 0 loop-count flags broadcast sleep)
         (values nil `(:unknown-host ,target))))))
 
