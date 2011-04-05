@@ -124,6 +124,27 @@
 ;; icmp header
 (defconstant +ICMP_ECHO+ 8)
 (defconstant +ICMP_ECHO_REPLY+ 0)
+(defconstant +ICMP_UNREACH+ 3)
+
+(defparameter *icmp-unreach-types*
+  (list
+    (defconstant +ICMP_UNREACH_NET+ 0 "bad net")
+    (defconstant +ICMP_UNREACH_HOST+ 1 "bad host")
+    (defconstant +ICMP_UNREACH_PROTOCOL+ 2 "bad protocol")
+    (defconstant +ICMP_UNREACH_PORT+ 3 "bad port")
+    (defconstant +ICMP_UNREACH_NEEDFRAG+ 4 "IP_DF caused drop")
+    (defconstant +ICMP_UNREACH_SRCFAIL+ 5 "src route failed")
+    (defconstant +ICMP_UNREACH_NET_UNKNOWN+ 6 "unknown net")
+    (defconstant +ICMP_UNREACH_HOST_UNKNOWN+ 7 "unknown host")
+    (defconstant +ICMP_UNREACH_ISOLATED+ 8 "src host isolated")
+    (defconstant +ICMP_UNREACH_NET_PROHIB+ 9 "net denied")
+    (defconstant +ICMP_UNREACH_HOST_PROHIB+ 10 "host denied")
+    (defconstant +ICMP_UNREACH_TOSNET+ 11 "bad tos for net")
+    (defconstant +ICMP_UNREACH_TOSHOST+ 12 "bad tos for host")
+    (defconstant +ICMP_UNREACH_FILTER_PROHIB+ 13 "admin prohib")
+    (defconstant +ICMP_UNREACH_HOST_PRECEDENCE+ 14 "host prec vio.")
+    (defconstant +ICMP_UNREACH_PRECEDENCE_CUTOFF+ 15 "prec cutoff")))
+
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
 (define-alien-type nil
@@ -227,11 +248,10 @@
                     :addr (sockaddr-in.ip obj)))))
   0)
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; 
 (defconstant +AF_INET+ 2)
 (defconstant +SOCK_RAW+ 3)
 (defconstant +IPPROTO_ICMP+ 1)
+
 
 ;;;;;;;;;;;
 ;; echo

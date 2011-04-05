@@ -51,6 +51,18 @@
   (declare #.*muffle-compiler-note*)
   (/= -1 (recv socket (cast buf (* t)) ip-echo.size flags)))
 
+(defun extract-message (icmp)
+  (case (icmp-echo-header.type icmp)
+    (#.+ICMP_ECHO+ "LOOPBACK")
+    (#.+ICMP_ECHO_REPLY+ "REPLY")
+    (#.+ICMP_UNREACH+
+      ;; TODO: out of range check
+      (format nil "UNREACHED - ~a"
+        (documentation (nth (icmp-echo-header.code icmp) *icmp-unreach-types*)
+                       'variable)))
+    (otherwise
+      (list :unknown (icmp-echo-header.type icmp)))))
+
 (defun ping-impl (sa seq-num loop-count flags)
   (declare #.*muffle-compiler-note*)
   (if (>= seq-num loop-count)
@@ -71,10 +83,12 @@
                     
                     (unless (icmp-recv sock echo 0)
                       (return-from ping-impl (values nil `(:recv-error ,(get-errno) ,(sb-int:strerror (get-errno)))))))
-                 (sb-unix:unix-close sock))))
-          (log-msg "reply from ~/ping::ip-fmt/: icmp_seq=~d ttl=~d time=~d ms" 
-                   (sockaddr-in.ip sa) seq-num (ip-header.ttl (slot echo 'ip-header)) (round took))
-          
+                 (sb-unix:unix-close sock)))
+              (ip (slot echo 'ip-header))
+              (icmp (slot echo 'icmp-echo)))
+          (log-msg "From ~/ping::ip-fmt/: icmp_seq=~d ttl=~d time=~d ms: ~a" 
+                   (addr-to-ip (ip-header.src-addr ip)) seq-num (ip-header.ttl ip) (round took)
+                   (extract-message icmp))
           (ping-impl sa (1+ seq-num) loop-count flags))))))
 
 (defun make-flags (&key dont-route)
