@@ -51,7 +51,7 @@
   (declare #.*muffle-compiler-note*)
   (/= -1 (recv socket (cast buf (* t)) ip-echo.size flags)))
 
-(defun ping-impl (sa seq-num loop-count)
+(defun ping-impl (sa seq-num loop-count flags)
   (declare #.*muffle-compiler-note*)
   (if (>= seq-num loop-count)
       'done
@@ -66,7 +66,7 @@
         (let ((took
                (unwind-protect
                    (timing
-                    (unless (icmp-sendto sock icmp sa 0)
+                    (unless (icmp-sendto sock icmp sa flags)
                       (return-from ping-impl (values nil `(:sendto-error ,(get-errno) ,(sb-int:strerror (get-errno))))))
                     
                     (unless (icmp-recv sock echo 0)
@@ -75,13 +75,20 @@
           (log-msg "reply from ~/ping::ip-fmt/: icmp_seq=~d ttl=~d time=~d ms" 
                    (sockaddr-in.ip sa) seq-num (ip-header.ttl (slot echo 'ip-header)) (round took))
           
-          (ping-impl sa (1+ seq-num) loop-count))))))
-     
-(defun ping (target &key (loop-count 10))
+          (ping-impl sa (1+ seq-num) loop-count flags))))))
+
+(defun make-flags (&key dont-route)
+  (let ((flags 0))
+    (when dont-route
+      (setf flags (logior flags +MSG_DONTROUTE+)))
+    flags))
+ 
+(defun ping (target &key (loop-count 10) dont-route)
   (declare #.*muffle-compiler-note*)
   (log-msg "ping to ~a~@[ (~/ping::ip-fmt/)~]" target (resolve-address target))
-  (with-alien ((sa (struct sockaddr-in)))
-    (n.if (ip (resolve-address target))
-        (ping-impl (init-sockaddr-in sa ip) 0 loop-count)
-      (values nil `(:unknown-host ,target)))))
+  (let ((flags (make-flags :dont-route dont-route)))
+    (with-alien ((sa (struct sockaddr-in)))
+      (n.if (ip (resolve-address target))
+          (ping-impl (init-sockaddr-in sa ip) 0 loop-count flags)
+        (values nil `(:unknown-host ,target))))))
 

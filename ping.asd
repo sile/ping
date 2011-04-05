@@ -3,7 +3,7 @@
 (defsystem ping 
   :name "ping"
   :author "Takeru Ohta"
-  :version "0.0.1"
+  :version "0.0.2"
   :description "icmp ping"
   
   :depends-on (:sb-bsd-sockets)

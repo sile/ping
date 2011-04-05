@@ -3,9 +3,10 @@
 ・実行にはroot権限が必要
 
 ### バージョン
-・0.0.1
+・0.0.2
 
 ### API
-・(ping:ping target &key (loop-count 10))
+・(ping:ping target &key (loop-count 10) dont-route)
 　- target: ping先のIPアドレスかホスト名。文字列 or #(x x x x)形式
 　- loop-count: pingメッセージを送信する回数
+　- dont-route: MSG_DONTROUTEをフラグに指定してpingメッセージを送信する

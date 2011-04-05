@@ -255,3 +255,6 @@
 (defconstant icmp-echo-header.size (alien-size (struct icmp-echo-header) :bytes))
 (defconstant sockaddr-in.size (alien-size (struct sockaddr-in) :bytes))
 (defconstant ip-echo.size (alien-size (struct ip-echo) :bytes))
+
+;; see: http://linux.die.net/include/bits/socket.h
+(defconstant +MSG_DONTROUTE+ #x04)
