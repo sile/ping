@@ -11,7 +11,7 @@
   (define-alien-routine sendto int (sockfd int) (buf (* t))
                                    (len size_t) (flags int)
                                    (dest_addr (* (struct sockaddr-in))) (addrlen socklen_t))
-  (define-alien-routine recv size_t (socketfd int) (buf (* t)) (len size_t) (flags int)))
+  (define-alien-routine recv int (socketfd int) (buf (* t)) (len size_t) (flags int)))
 
 (defun set-broadcast-option (socket)
   (declare #.*muffle-compiler-note*)
@@ -56,9 +56,13 @@
                  (cast icmp (* t)) icmp-echo-header.size flags
                  (cast sa (* (struct sockaddr-in))) sockaddr-in.size)))
 
+;; XXX: 
 (defun icmp-recv (socket buf flags)
   (declare #.*muffle-compiler-note*)
-  (/= -1 (recv socket (cast buf (* t)) ip-echo.size flags)))
+  (/= 2 (recv socket (cast buf (* t)) ip-echo.size flags)))
+(defun icmp-recv2 (socket buf flags)
+  (declare #.*muffle-compiler-note*)
+  (recv socket (cast buf (* t)) ip-echo.size flags))
 
 (defun extract-message (icmp)
   (case (icmp-echo-header.type icmp)
@@ -71,6 +75,45 @@
                        'variable)))
     (otherwise
       (list :unknown (icmp-echo-header.type icmp)))))
+
+(defmacro return-error (block method)
+   ;; TODO: throw and catch
+  `(return-from ,block (values nil (print (list ,method (get-errno) (sb-int:strerror (get-errno)))))))
+
+(defun echo-and-reply (sock icmp sa flags echo seq-num)
+  (let ((took 
+          (timing
+            (unless (icmp-sendto sock icmp sa flags)
+              (return-error echo-and-reply :sendto-error))
+            (unless (icmp-recv sock echo 0) 
+              (return-error echo-and-reply :recv-error))))
+        (reply-ip (slot echo 'ip-header))
+        (reply-icmp (slot echo 'icmp-echo)))
+    (log-msg "From ~/ping::ip-fmt/: icmp_seq=~d ttl=~d time=~d ms: ~a"
+             (addr-to-ip (ip-header.src-addr reply-ip)) seq-num (ip-header.ttl reply-ip) (round took)
+             (extract-message reply-icmp))))
+
+(defun bcecho-and-reply (sock icmp sa flags echo seq-num &aux (beg-t (now-ms)))
+  (unless (icmp-sendto sock icmp sa flags)
+    (return-error bcecho-and-reply :sendto-error))
+  (loop WITH wait-limit = 5
+        WITH wait-time = 0.1
+        FOR ret = (icmp-recv2 sock echo +MSG_DONTWAIT+)
+        WHILE (plusp wait-limit)
+     DO
+     (cond ((/= -1 ret)
+             (sleep wait-time)
+             (let ((reply-ip (slot echo 'ip-header))
+                   (reply-icmp (slot echo 'icmp-echo)))
+               (log-msg "From ~/ping::ip-fmt/: icmp_seq=~d ttl=~d time=~d ms: ~a"
+                        (addr-to-ip (ip-header.src-addr reply-ip)) seq-num (ip-header.ttl reply-ip) (- (now-ms) beg-t)
+                        (extract-message reply-icmp)))
+             (when (= ret 0)
+               (return)))
+          ((= +EAGAIN+ (get-errno))
+            (sleep wait-time)
+            (decf wait-limit))
+          (t (return-error bcecho-and-reply :recv-error)))))
 
 (defun ping-impl (sa seq-num loop-count flags broadcast sleep)
   (declare #.*muffle-compiler-note*)
@@ -85,22 +128,13 @@
         (unless sock
           (return-from ping-impl (values nil `(:make-socket-error ,errcode ,reason))))
         
-        (let ((took
-               (unwind-protect
-                   (timing
-                    (unless (icmp-sendto sock icmp sa flags)
-                      (return-from ping-impl (values nil `(:sendto-error ,(get-errno) ,(sb-int:strerror (get-errno))))))
-                    
-                    (unless (icmp-recv sock echo 0)
-                      (return-from ping-impl (values nil `(:recv-error ,(get-errno) ,(sb-int:strerror (get-errno)))))))
-                 (sb-unix:unix-close sock)))
-              (ip (slot echo 'ip-header))
-              (icmp (slot echo 'icmp-echo)))
-          (log-msg "From ~/ping::ip-fmt/: icmp_seq=~d ttl=~d time=~d ms: ~a" 
-                   (addr-to-ip (ip-header.src-addr ip)) seq-num (ip-header.ttl ip) (round took)
-                   (extract-message icmp))
-          (sleep sleep)
-          (ping-impl sa (1+ seq-num) loop-count flags broadcast sleep))))))
+        (unwind-protect
+            (if (not broadcast)
+                (echo-and-reply sock icmp sa flags echo seq-num)
+              (bcecho-and-reply sock icmp sa flags echo seq-num))
+          (sb-unix:unix-close sock))
+        (sleep sleep)
+        (ping-impl sa (1+ seq-num) loop-count flags broadcast sleep)))))
 
 (defun make-flags (&key dont-route)
   (let ((flags 0))
@@ -116,4 +150,3 @@
       (n.if (ip (resolve-address target))
           (ping-impl (init-sockaddr-in sa ip) 0 loop-count flags broadcast sleep)
         (values nil `(:unknown-host ,target))))))
-

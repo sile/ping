@@ -65,6 +65,9 @@
   `(let ((,var ,exp))
      (if ,var ,then ,else)))
 
+(defun now-ms ()
+  (* (/ (get-internal-real-time) INTERNAL-TIME-UNITS-PER-SECOND) 1000))
+
 (defmacro timing (&body exps)
   (let ((begin (gensym)))
     `(let ((,begin (get-internal-real-time)))

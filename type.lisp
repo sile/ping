@@ -282,3 +282,7 @@
 
 ;; see: http://linux.die.net/include/bits/socket.h
 (defconstant +MSG_DONTROUTE+ #x04)
+(defconstant +MSG_DONTWAIT+ #x40)
+
+(eval-when (:load-toplevel :compile-toplevel :execute)
+(defconstant +EAGAIN+ 11))
