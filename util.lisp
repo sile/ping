@@ -1,26 +1,13 @@
 (in-package :ping)
 
-(declaim (inline to-native-order to-network-order))
-(defun to-native-order (int size)
-  (declare (ignorable size))
-  #.(if (eq sb-c:*backend-byte-order* :big-endian)
-        'int
-      '(progn
-         (ecase size
-           (1)
-           (2 (rotatef (ldb (byte 8 0) int)
-                       (ldb (byte 8 8) int)))
-           (4 (rotatef (ldb (byte 8 0) int)
-                       (ldb (byte 8 24) int))
-              (rotatef (ldb (byte 8 8) int)
-                       (ldb (byte 8 16) int))))
-         int)))
-
-(defun to-network-order (int size)
-  (to-native-order int size))
-
-(defmacro alien-coerce (obj new-type)
-  `(deref (cast (addr ,obj) (* ,new-type))))
+(defun reverse-order (int size)
+  (loop FOR i FROM 0 TO size
+        FOR j FROM (1- size) DOWNTO 0
+        WHILE (< i j)
+    DO
+    (rotatef (ldb (byte 8 (* i 8)) int)
+             (ldb (byte 8 (* j 8)) int)))
+  int)
 
 (defun resolve-address (hostname-or-ipaddress &aux (host hostname-or-ipaddress))
   (handler-case
@@ -31,6 +18,12 @@
    (sb-bsd-sockets:name-service-error ()
      nil)))
 
+(defun to-network-order (int size)
+  (declare (ignorable size))
+  #.(if (eq *native-endian* :big)
+        'int
+      '(reverse-order int size)))
+
 (defun addr-to-ip (ip)
   (loop FOR i FROM 3 DOWNTO 0
         COLLECT (ldb (byte 8 (* i 8)) ip) INTO list
@@ -38,7 +31,7 @@
 
 (defun ip-to-addr (ip-vector)
   (loop FOR n ACROSS ip-vector
-        FOR i FROM 3 DOWNTO 0
+        FOR i FROM 0 TO 3
         SUM (ash n (* i 8))))
 
 (defun memset (sap value size)
@@ -61,10 +54,6 @@
           sum (+ (ldb (byte 16 0) sum) (ash sum -16)))
     (logxor #xFFFF (ldb (byte 16 0) sum))))
 
-(defmacro n.if ((var exp) then else)
-  `(let ((,var ,exp))
-     (if ,var ,then ,else)))
-
 (defun now-ms ()
   (* (/ (get-internal-real-time) INTERNAL-TIME-UNITS-PER-SECOND) 1000))
 
@@ -73,3 +62,22 @@
     `(let ((,begin (get-internal-real-time)))
        ,@exps
        (* (/ (- (get-internal-real-time) ,begin) INTERNAL-TIME-UNITS-PER-SECOND) 1000))))
+
+(defun dotted-ip (addr)
+  (format nil "~d.~d.~d.~d" 
+          (ldb (byte 8 24) addr) (ldb (byte 8 16) addr) 
+          (ldb (byte 8 08) addr) (ldb (byte 8 00) addr)))
+
+(defun mksym (&rest args)
+  (intern (format nil "~{~:@(~a~)~}" args)))
+
+(defmacro n.if ((var exp) then else)
+  `(let ((,var ,exp))
+     (if ,var ,then ,else)))
+
+(defun log-msg (fmt &rest args)
+  (format *error-output* "; ~?~%" fmt args))
+
+(defun ip-fmt (stream ip &rest ignore)
+  (declare (ignore ignore))
+  (write-string (dotted-ip ip) stream))

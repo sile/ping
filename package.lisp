@@ -10,3 +10,5 @@
 
 (defvar *muffle-compiler-note* '(sb-ext:muffle-conditions sb-ext:compiler-note))
 
+(defvar *native-endian* 
+  (if (eq sb-c:*backend-byte-order* :big-endian) :big :little))

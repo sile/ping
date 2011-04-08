@@ -3,7 +3,7 @@
 ・実行にはroot権限が必要
 
 ### バージョン
-・0.0.2
+・0.0.3
 
 ### API
 ・(ping:ping target &key (loop-count 10) dont-route)
